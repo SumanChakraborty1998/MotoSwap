@@ -2,8 +2,11 @@
 pragma solidity >=0.4.22 <0.9.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract Dex {
+    using SafeMath for uint256;
+
     struct Token {
         bytes32 ticker;
         address tokenAddress;
@@ -73,6 +76,25 @@ contract Dex {
         _;
     }
 
+    function getOrders(bytes32 ticker, Side side)
+        external
+        view
+        returns (Order[] memory)
+    {
+        return orderBook[ticker][uint256(side)];
+    }
+
+    function getTokens() external view returns (Token[] memory) {
+        Token[] memory _tokens = new Token[](tokenList.length);
+        for (uint256 i = 0; i < tokenList.length; i++) {
+            _tokens[i] = Token(
+                tokens[tokenList[i]].ticker,
+                tokens[tokenList[i]].tokenAddress
+            );
+        }
+        return _tokens;
+    }
+
     function addToken(bytes32 ticker, address tokenAddress) external onlyAdmin {
         Token memory token = Token(ticker, tokenAddress);
         tokens[ticker] = token;
@@ -89,7 +111,8 @@ contract Dex {
             amount
         );
 
-        traderBalances[msg.sender][ticker] += amount;
+        traderBalances[msg.sender][ticker] = traderBalances[msg.sender][ticker]
+            .add(amount);
     }
 
     function withdraw(uint256 amount, bytes32 ticker)
@@ -103,7 +126,8 @@ contract Dex {
 
         IERC20(tokens[ticker].tokenAddress).transfer(msg.sender, amount);
 
-        traderBalances[msg.sender][ticker] -= amount;
+        traderBalances[msg.sender][ticker] = traderBalances[msg.sender][ticker]
+            .sub(amount);
     }
 
     //Creating 2nd Part - Limit Order
@@ -120,7 +144,7 @@ contract Dex {
             );
         } else {
             require(
-                traderBalances[msg.sender][DAI] >= amount * price,
+                traderBalances[msg.sender][DAI] >= amount.mul(price),
                 "Insufficient Dai Balances"
             );
         }
@@ -139,7 +163,7 @@ contract Dex {
             )
         );
 
-        uint256 i = orders.length - 1;
+        uint256 i = orders.length > 0 ? orders.length - 1 : 0;
 
         //Bubble Sort
         while (i > 0) {
@@ -179,10 +203,10 @@ contract Dex {
         uint256 remaining = amount;
 
         while (i < orders.length && remaining > 0) {
-            uint256 available = orders[i].amount - orders[i].filled;
+            uint256 available = orders[i].amount.sub(orders[i].filled);
             uint256 matched = remaining > available ? available : remaining;
-            remaining -= matched;
-            orders[i].filled += matched;
+            remaining = remaining.sub(matched);
+            orders[i].filled = orders[i].filled.add(matched);
 
             emit NewTrade(
                 nextTradeId,
@@ -196,26 +220,45 @@ contract Dex {
             );
 
             if (side == Side.SELL) {
-                traderBalances[msg.sender][ticker] -= matched;
-                traderBalances[msg.sender][DAI] += matched * orders[i].price;
-                traderBalances[orders[i].trader][ticker] += matched;
-                traderBalances[orders[i].trader][DAI] -=
-                    matched *
-                    orders[i].price;
+                traderBalances[msg.sender][ticker] = traderBalances[msg.sender][
+                    ticker
+                ].sub(matched);
+
+                traderBalances[msg.sender][DAI] = traderBalances[msg.sender][
+                    DAI
+                ].add(matched.mul(orders[i].price));
+
+                traderBalances[orders[i].trader][ticker] = traderBalances[
+                    orders[i].trader
+                ][ticker].add(matched);
+
+                traderBalances[orders[i].trader][DAI] = traderBalances[
+                    orders[i].trader
+                ][DAI].sub(matched.mul(orders[i].price));
             }
 
             if (side == Side.BUY) {
                 require(
                     traderBalances[msg.sender][DAI] >=
-                        matched * orders[i].price,
+                        matched.mul(orders[i].price),
                     "Insufficient Dai Balances"
                 );
-                traderBalances[msg.sender][ticker] += matched;
-                traderBalances[msg.sender][DAI] -= matched * orders[i].price;
-                traderBalances[orders[i].trader][ticker] -= matched;
-                traderBalances[orders[i].trader][DAI] +=
-                    matched *
-                    orders[i].price;
+
+                traderBalances[msg.sender][ticker] = traderBalances[msg.sender][
+                    ticker
+                ].add(matched);
+
+                traderBalances[msg.sender][DAI] = traderBalances[msg.sender][
+                    DAI
+                ].sub(matched.mul(orders[i].price));
+
+                traderBalances[orders[i].trader][ticker] = traderBalances[
+                    orders[i].trader
+                ][ticker].sub(matched);
+
+                traderBalances[orders[i].trader][DAI] = traderBalances[
+                    orders[i].trader
+                ][DAI].add(matched.mul(orders[i].price));
             }
             nextTradeId++;
             i++;
