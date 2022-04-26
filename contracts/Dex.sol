@@ -54,7 +54,7 @@ contract Dex {
 
     //Creating Market Order and Matching
 
-    constructor() public {
+    constructor() {
         admin = msg.sender;
     }
 
