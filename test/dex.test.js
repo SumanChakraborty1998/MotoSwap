@@ -5,6 +5,11 @@ const Xrp = artifacts.require("mocks/Xrp.sol");
 const Dex = artifacts.require("Dex.sol");
 // const { expectRevert } = require("@openzeppelin/test-helpers");
 
+const SIDE = {
+  BUY: 0,
+  SELL: 1,
+};
+
 contract("Dex", (accounts) => {
   let dai, bat, xrp, shib, dex;
 
@@ -103,6 +108,108 @@ contract("Dex", (accounts) => {
     } catch (e) {
       // console.log(e);
       assert(e.reason === "Not enough Balances");
+    }
+  });
+
+  //Create Limit Order
+  it("Should Create Limit Order", async () => {
+    await dex.deposit(web3.utils.toWei("100"), DAI, { from: trader1 });
+
+    await dex.createLimitOrder(BAT, web3.utils.toWei("10"), 10, SIDE.BUY, {
+      from: trader1,
+    });
+
+    let buyOrders;
+    let sellOrders;
+    buyOrders = await dex.getOrders(BAT, SIDE.BUY);
+    sellOrders = await dex.getOrders(BAT, SIDE.SELL);
+
+    assert(buyOrders.length === 1);
+    assert(buyOrders[0].trader === trader1);
+    assert(buyOrders[0].ticker === web3.utils.padRight(BAT, 64));
+    assert(buyOrders[0].price === "10");
+    assert(buyOrders[0].amount === web3.utils.toWei("10"));
+    assert(sellOrders.length === 0);
+
+    await dex.deposit(web3.utils.toWei("200"), DAI, { from: trader2 });
+
+    await dex.createLimitOrder(BAT, web3.utils.toWei("10"), 11, SIDE.BUY, {
+      from: trader2,
+    });
+
+    buyOrders = await dex.getOrders(BAT, SIDE.BUY);
+    sellOrders = await dex.getOrders(BAT, SIDE.SELL);
+
+    assert(buyOrders.length === 2);
+    assert(buyOrders[0].trader === trader2);
+    assert(buyOrders[1].trader === trader1);
+    assert(buyOrders[0].price === "11");
+
+    await dex.deposit(web3.utils.toWei("200"), DAI, { from: trader2 });
+
+    await dex.createLimitOrder(BAT, web3.utils.toWei("10"), 9, SIDE.BUY, {
+      from: trader2,
+    });
+
+    buyOrders = await dex.getOrders(BAT, SIDE.BUY);
+    sellOrders = await dex.getOrders(BAT, SIDE.SELL);
+
+    assert(buyOrders.length === 3);
+    assert(buyOrders[0].trader === trader2);
+    assert(buyOrders[1].trader === trader1);
+    assert(buyOrders[2].trader === trader2);
+    assert(buyOrders[2].price === "9");
+  });
+
+  it("Should not create limit order, if DAI balance is too low", async () => {
+    await dex.deposit(web3.utils.toWei("190"), DAI, { from: trader2 });
+    try {
+      await dex.createLimitOrder(BAT, web3.utils.toWei("20"), 10, SIDE.BUY, {
+        from: trader2,
+      });
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "Insufficient Dai Balances");
+    }
+  });
+
+  it("Should not create limit order, if tokens balance is too low", async () => {
+    await dex.deposit(web3.utils.toWei("90"), BAT, { from: trader2 });
+    try {
+      await dex.createLimitOrder(BAT, web3.utils.toWei("100"), 10, SIDE.SELL, {
+        from: trader2,
+      });
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "Insufficient Token");
+    }
+  });
+
+  it("Should not create limit order, if token is DAI", async () => {
+    try {
+      await dex.createLimitOrder(DAI, web3.utils.toWei("100"), 10, SIDE.BUY, {
+        from: trader2,
+      });
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "DAI is not supported to Trade");
+    }
+  });
+
+  it.only("Should not create limit order, if token does not exist", async () => {
+    try {
+      await dex.createLimitOrder(
+        web3.utils.fromAscii("RANDOM"),
+        web3.utils.toWei("100"),
+        10,
+        SIDE.BUY,
+        {
+          from: trader2,
+        },
+      );
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "Token is not supported");
     }
   });
 });
