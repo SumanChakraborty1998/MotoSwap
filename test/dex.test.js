@@ -196,7 +196,7 @@ contract("Dex", (accounts) => {
     }
   });
 
-  it.only("Should not create limit order, if token does not exist", async () => {
+  it("Should not create limit order, if token does not exist", async () => {
     try {
       await dex.createLimitOrder(
         web3.utils.fromAscii("RANDOM"),
@@ -210,6 +210,76 @@ contract("Dex", (accounts) => {
     } catch (e) {
       // console.log(e);
       assert(e.reason === "Token is not supported");
+    }
+  });
+
+  //Create Market Order
+  it("Should Create Market Order & match", async () => {
+    await dex.deposit(web3.utils.toWei("100"), DAI, { from: trader1 });
+
+    await dex.createLimitOrder(BAT, web3.utils.toWei("10"), 10, SIDE.BUY, {
+      from: trader1,
+    });
+
+    await dex.deposit(web3.utils.toWei("100"), BAT, { from: trader2 });
+
+    await dex.createMarketOrder(BAT, web3.utils.toWei("5"), SIDE.SELL, {
+      from: trader2,
+    });
+
+    const balances = await Promise.all([
+      dex.traderBalances(trader1, DAI),
+      dex.traderBalances(trader1, BAT),
+      dex.traderBalances(trader2, DAI),
+      dex.traderBalances(trader2, BAT),
+    ]);
+
+    const orders = await dex.getOrders(BAT, SIDE.BUY);
+
+    assert(orders.length === 1);
+    assert(orders[0].filled === web3.utils.toWei("5"));
+    assert(balances[0].toString() === web3.utils.toWei("50"));
+    assert(balances[1].toString() === web3.utils.toWei("5"));
+    assert(balances[2].toString() === web3.utils.toWei("50"));
+    assert(balances[3].toString() === web3.utils.toWei("95"));
+  });
+
+  it("Should not create Market order, if token does not exist", async () => {
+    try {
+      await dex.createMarketOrder(
+        web3.utils.fromAscii("RANDOM"),
+        web3.utils.toWei("100"),
+        SIDE.BUY,
+        {
+          from: trader1,
+        },
+      );
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "Token is not supported");
+    }
+  });
+
+  it("Should not create Market order, if token is DAI", async () => {
+    try {
+      await dex.createMarketOrder(DAI, web3.utils.toWei("100"), SIDE.BUY, {
+        from: trader2,
+      });
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "DAI is not supported to Trade");
+    }
+  });
+
+  it("Should not create Market order, if tokens balance is too low", async () => {
+    await dex.deposit(web3.utils.toWei("90"), BAT, { from: trader2 });
+    try {
+      await dex.createMarketOrder(BAT, web3.utils.toWei("100"), SIDE.SELL, {
+        from: trader2,
+      });
+    } catch (e) {
+      // console.log(e);
+      assert(e.reason === "Insufficient Token");
     }
   });
 });
