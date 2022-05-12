@@ -66,7 +66,7 @@ contract Dex {
     modifier tokenExists(bytes32 _ticker) {
         require(
             tokens[_ticker].tokenAddress != address(0),
-            "Token is not supported"
+            "Token is not supportedddd"
         );
         _;
     }

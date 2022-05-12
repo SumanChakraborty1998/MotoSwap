@@ -4,7 +4,7 @@ pragma solidity >=0.4.22 <0.9.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract Xrp is ERC20 {
-    constructor() ERC20("Ripple", "XRP") {}
+    constructor() ERC20("XRP", "Ripple") {}
 
     function faucet(address to, uint256 amount) external {
         _mint(to, amount);

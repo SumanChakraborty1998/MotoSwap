@@ -18,7 +18,8 @@
   },
   "homepage": "https://github.com/SumanChakraborty1998/MotoSwap#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^4.5.0"
+    "@openzeppelin/contracts": "^4.5.0",
+    "ethers": "^5.6.5"
   },
   "devDependencies": {
     "@openzeppelin/test-helpers": "^0.5.15"
